@@ -44,7 +44,6 @@ pyasn1==0.6.3
 pycparser==2.23
 pydantic==2.5.0
 pydantic-settings==2.1.0
-pydantic_core==2.14.1
 PyJWT==2.8.0
 PyMuPDF==1.23.8
 PyMuPDFb==1.23.7
