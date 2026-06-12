@@ -19,7 +19,9 @@ class EnhancedResume(Base, TimestampMixin):
     enhanced_summary = Column(Text, nullable=True)
     enhanced_experience = Column(Text, nullable=True)
     enhanced_full_content = Column(Text, nullable=True)
-    
+    improvements_made = Column(Text, nullable=True)
+    estimated_ats_score_gain = Column(Integer, nullable=True)
+
     # Metadata
     version = Column(Integer, default=1, nullable=False)
 

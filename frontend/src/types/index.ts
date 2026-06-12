@@ -39,6 +39,7 @@ export interface SectionFeedback {
   missing_information: string[]
   recommendations: string[]
   ats_impact: 'High' | 'Medium' | 'Low'
+  why_it_affects_ats?: string
   example_improvement?: string
 }
 
@@ -56,6 +57,7 @@ export interface FormattingIssue {
   description: string
   ats_impact: 'High' | 'Medium' | 'Low'
   recommendation: string
+  why_it_affects_ats?: string
 }
 
 export interface ImprovementSuggestion {
@@ -64,6 +66,8 @@ export interface ImprovementSuggestion {
   suggestion: string
   example?: string
   ats_impact: 'High' | 'Medium' | 'Low'
+  why_it_affects_ats?: string
+  expected_improvement?: string
 }
 
 export interface RoadmapItem {
@@ -72,6 +76,86 @@ export interface RoadmapItem {
   category: 'Critical Fixes' | 'Recommended Improvements' | 'Optional Enhancements'
   estimated_score_gain: number
   priority: number
+}
+
+export interface CoachingInsight {
+  area: string
+  what_is_wrong: string
+  why_it_impacts_ats: string
+  how_to_fix: string
+  expected_improvement: string
+  priority: 'Critical' | 'High' | 'Medium' | 'Low'
+}
+
+export interface ActionVerbAnalysis {
+  score: number
+  strong_verbs_found: string[]
+  weak_phrases_found: string[]
+  strong_verb_count: number
+  weak_phrase_count: number
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface AchievementImpactAnalysis {
+  score: number
+  quantified_bullets: number
+  total_bullets: number
+  unquantified_bullets: number
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface SkillsGapAnalysis {
+  score: number
+  present_skills: string[]
+  missing_skills: string[]
+  skill_gaps: string[]
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface ReadabilityAnalysis {
+  score: number
+  professionalism_score: number
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface IndustryRelevanceAnalysis {
+  score: number
+  relevant_keywords: string[]
+  industry_gaps: string[]
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface JobCompatibilityAnalysis {
+  score: number
+  compatibility_level: string
+  aligned_areas: string[]
+  misalignment_areas: string[]
+  assessment: string
+  issues: string[]
+  recommendations: string[]
+  why_it_affects_ats: string
+}
+
+export interface ChecklistItem {
+  item: string
+  completed: boolean
+  priority: 'Critical' | 'High' | 'Medium' | 'Low'
+  category: string
 }
 
 export interface ATSAnalysisReport {
@@ -84,6 +168,15 @@ export interface ATSAnalysisReport {
   strengths: string[]
   weaknesses: string[]
   roadmap: RoadmapItem[]
+  coaching_insights: CoachingInsight[]
+  action_verb_analysis: ActionVerbAnalysis
+  achievement_impact_analysis: AchievementImpactAnalysis
+  skills_gap_analysis: SkillsGapAnalysis
+  readability_analysis: ReadabilityAnalysis
+  industry_relevance_analysis: IndustryRelevanceAnalysis
+  job_compatibility_analysis?: JobCompatibilityAnalysis
+  optimization_checklist: ChecklistItem[]
+  ai_enhanced?: boolean
 }
 
 export interface ResumeAnalysis {
@@ -102,6 +195,13 @@ export interface ResumeAnalysis {
   updated_at: string
 }
 
+export interface ImprovementChange {
+  section: string
+  change: string
+  before?: string
+  after?: string
+}
+
 export interface EnhancedResume {
   id: number
   user_id: number
@@ -109,6 +209,10 @@ export interface EnhancedResume {
   analysis_id?: number
   enhanced_summary?: string
   enhanced_experience?: string
+  enhanced_full_content?: string
+  improvements_made?: ImprovementChange[]
+  estimated_ats_score_gain?: number
+  original_content?: string
   version: number
   created_at: string
   updated_at: string

@@ -48,7 +48,7 @@ def test_analyze_resume_returns_report():
     report = analyze_resume_ats(SAMPLE_RESUME)
     assert report.overall_ats_score > 0
     assert report.overall_ats_score <= 100
-    assert len(report.category_scores) == 10
+    assert len(report.category_scores) >= 15
     assert len(report.section_feedback) == 8
 
 
@@ -64,11 +64,38 @@ def test_category_scores_present():
         "Projects",
         "Certifications",
         "Keyword Optimization",
-        "Formatting & Readability",
+        "Formatting & Structure",
+        "Action Verb Usage",
+        "Achievement & Impact",
+        "Skills Gap",
+        "Readability & Professionalism",
+        "Industry Relevance",
     ]
     for cat in expected_categories:
         assert cat in report.category_scores
         assert 0 <= report.category_scores[cat] <= 100
+
+
+def test_deep_analysis_dimensions():
+    report = analyze_resume_ats(SAMPLE_RESUME, SAMPLE_JD)
+    assert report.action_verb_analysis.score > 0
+    assert report.achievement_impact_analysis.quantified_bullets > 0
+    assert report.skills_gap_analysis.score > 0
+    assert report.readability_analysis.score > 0
+    assert report.industry_relevance_analysis.score > 0
+    assert report.job_compatibility_analysis is not None
+    assert report.job_compatibility_analysis.compatibility_level in ("Strong", "Moderate", "Weak")
+
+
+def test_coaching_insights_and_checklist():
+    report = analyze_resume_ats(SAMPLE_RESUME)
+    assert len(report.coaching_insights) > 0
+    assert len(report.optimization_checklist) > 0
+    insight = report.coaching_insights[0]
+    assert insight.what_is_wrong
+    assert insight.why_it_impacts_ats
+    assert insight.how_to_fix
+    assert insight.expected_improvement
 
 
 def test_section_feedback_structure():
@@ -78,6 +105,7 @@ def test_section_feedback_structure():
         assert 0 <= section.score <= 100
         assert section.assessment
         assert section.ats_impact in ("High", "Medium", "Low")
+        assert section.why_it_affects_ats
 
 
 def test_keyword_analysis_with_jd():

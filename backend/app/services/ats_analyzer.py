@@ -10,6 +10,14 @@ from app.schemas.ats_analysis import (
     FormattingIssue,
     ImprovementSuggestion,
     RoadmapItem,
+    CoachingInsight,
+    ActionVerbAnalysis,
+    AchievementImpactAnalysis,
+    SkillsGapAnalysis,
+    ReadabilityAnalysis,
+    IndustryRelevanceAnalysis,
+    JobCompatibilityAnalysis,
+    ChecklistItem,
 )
 from app.utils.text_processor import (
     extract_email,
@@ -38,7 +46,13 @@ CATEGORY_LABELS = {
     "projects": "Projects",
     "certifications": "Certifications",
     "keyword_optimization": "Keyword Optimization",
-    "formatting_readability": "Formatting & Readability",
+    "formatting_readability": "Formatting & Structure",
+    "action_verbs": "Action Verb Usage",
+    "achievement_impact": "Achievement & Impact",
+    "skills_gap": "Skills Gap",
+    "readability_professionalism": "Readability & Professionalism",
+    "industry_relevance": "Industry Relevance",
+    "job_compatibility": "Job Role Compatibility",
 }
 
 ACTION_VERBS = {
@@ -861,10 +875,501 @@ def _build_roadmap(
     return items[:15]
 
 
+def _find_strong_verbs(text: str) -> list[str]:
+    words = re.findall(r"\b[a-z]+\b", text.lower())
+    return list(dict.fromkeys(w for w in words if w in ACTION_VERBS))
+
+
+def _find_weak_phrases(text: str) -> list[str]:
+    found = []
+    patterns = [
+        (r"\bresponsible for\b", "responsible for"),
+        (r"\bhelped with\b", "helped with"),
+        (r"\bworked on\b", "worked on"),
+        (r"\bassisted with\b", "assisted with"),
+        (r"\bparticipated in\b", "participated in"),
+        (r"\binvolved in\b", "involved in"),
+        (r"\bduties included\b", "duties included"),
+    ]
+    for pattern, label in patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            found.append(label)
+    return found
+
+
+def _analyze_action_verbs(text: str) -> ActionVerbAnalysis:
+    strong = _find_strong_verbs(text)
+    weak = _find_weak_phrases(text)
+    strong_count = _count_action_verbs(text)
+    weak_count = _count_weak_verbs(text) + len(weak)
+
+    score = 40.0
+    issues = []
+    recommendations = []
+
+    if strong_count >= 8:
+        score += 35
+    elif strong_count >= 4:
+        score += 20
+        recommendations.append("Increase action verb density — aim for one strong verb per bullet point")
+    else:
+        score += 5
+        issues.append("Resume lacks sufficient strong action verbs")
+        recommendations.append("Start bullets with verbs like Led, Built, Delivered, Optimized, Architected")
+
+    if weak_count == 0:
+        score += 25
+    elif weak_count <= 2:
+        score += 10
+        issues.append("Some passive or weak phrasing detected")
+        recommendations.append("Replace passive phrases with ownership-focused action verbs")
+    else:
+        issues.append(f"Found {weak_count} weak/passive phrases that dilute impact")
+        recommendations.append("Eliminate 'responsible for', 'helped with', and 'worked on' phrasing")
+
+    score = max(min(score, 100), 0)
+    assessment = (
+        "Excellent action verb usage — bullets convey ownership and impact."
+        if score >= 75
+        else "Moderate action verb usage — strengthening verbs will improve ATS and recruiter perception."
+        if score >= 50
+        else "Weak action verb usage — passive language reduces ATS keyword strength and impact."
+    )
+
+    return ActionVerbAnalysis(
+        score=score,
+        strong_verbs_found=strong[:15],
+        weak_phrases_found=weak,
+        strong_verb_count=strong_count,
+        weak_phrase_count=weak_count,
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _count_total_bullets(text: str) -> int:
+    return max(_count_bullet_points(text), 1)
+
+
+def _analyze_achievement_impact(text: str) -> AchievementImpactAnalysis:
+    total = _count_total_bullets(text)
+    quantified = 0
+    issues = []
+    recommendations = []
+
+    bullet_lines = re.findall(r"(?m)^\s*(?:[•●▪◦‣\-*]\s+)(.+)$", text)
+    for line in bullet_lines:
+        if _has_quantifiable_metrics(line):
+            quantified += 1
+
+    if not bullet_lines and _has_quantifiable_metrics(text):
+        quantified = max(1, total // 2)
+
+    ratio = quantified / total if total else 0
+    score = round(min(ratio * 100 + (20 if quantified >= 3 else 0), 100), 1)
+
+    if ratio < 0.3:
+        issues.append(f"Only {quantified} of ~{total} bullets contain quantifiable metrics")
+        recommendations.append("Add percentages, dollar amounts, team sizes, or time savings to bullets")
+    elif ratio < 0.6:
+        recommendations.append("Increase metric coverage — aim for metrics in at least 60% of bullets")
+
+    if quantified == 0:
+        issues.append("No quantified achievements detected — ATS and recruiters favor measurable results")
+        recommendations.append("Transform duties into achievements: 'Increased X by Y%' or 'Managed team of Z'")
+
+    assessment = (
+        f"Strong achievement focus with {quantified} quantified bullets."
+        if score >= 70
+        else f"Partial quantification — {quantified}/{total} bullets include metrics."
+        if score >= 40
+        else "Achievements lack measurable impact — critical for ATS ranking and recruiter appeal."
+    )
+
+    return AchievementImpactAnalysis(
+        score=score,
+        quantified_bullets=quantified,
+        total_bullets=total,
+        unquantified_bullets=max(total - quantified, 0),
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _analyze_skills_gap(
+    text: str,
+    job_description_text: Optional[str] = None,
+) -> SkillsGapAnalysis:
+    resume_skills = extract_skills_from_text(text)
+    issues = []
+    recommendations = []
+
+    if job_description_text:
+        required = extract_skills_from_text(job_description_text)
+        jd_keywords = extract_keywords(job_description_text, 20)
+        target_skills = list(dict.fromkeys(required + jd_keywords))
+        missing = [s for s in target_skills if s.lower() not in text.lower()]
+        present = [s for s in target_skills if s.lower() in text.lower()]
+        score = (len(present) / len(target_skills) * 100) if target_skills else 50.0
+        assessment = (
+            f"Strong skill alignment — {len(present)}/{len(target_skills)} required skills present."
+            if score >= 70
+            else f"Moderate skill gap — missing {len(missing)} skills from job requirements."
+            if score >= 40
+            else f"Significant skills gap — {len(missing)} required skills not found on resume."
+        )
+        if missing:
+            issues.append(f"Missing {len(missing)} skills required by the job description")
+            recommendations.append(
+                "Add missing skills to your Skills section and weave them into experience bullets where accurate"
+            )
+    else:
+        present = [kw for kw in INDUSTRY_KEYWORDS if kw in text.lower()]
+        missing = [kw for kw in INDUSTRY_KEYWORDS if kw not in text.lower()][:12]
+        score = (len(present) / len(INDUSTRY_KEYWORDS) * 100)
+        assessment = (
+            "Good coverage of industry-standard skills."
+            if score >= 50
+            else "Limited industry skill keywords — expand technical and professional competencies."
+        )
+        recommendations.append("Upload a job description for targeted skills gap analysis")
+
+    return SkillsGapAnalysis(
+        score=round(score, 1),
+        present_skills=resume_skills[:20],
+        missing_skills=missing[:15],
+        skill_gaps=missing[:10],
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _analyze_readability(text: str) -> ReadabilityAnalysis:
+    issues = []
+    recommendations = []
+    words = text.split()
+    word_count = len(words)
+    sentences = max(len(re.findall(r"[.!?]+", text)), 1)
+    avg_sentence_len = word_count / sentences
+
+    score = 80.0
+    prof_score = 85.0
+
+    if avg_sentence_len > 30:
+        score -= 15
+        issues.append("Sentences are too long — ATS parsers and recruiters prefer concise bullets")
+        recommendations.append("Keep bullets to 1-2 lines; break long sentences into separate points")
+
+    if re.search(r"\b(?:i am|i have|my |me )\b", text, re.IGNORECASE):
+        prof_score -= 15
+        issues.append("First-person pronouns detected — unprofessional for ATS-optimized resumes")
+        recommendations.append("Remove 'I', 'my', and 'me' — use implied first person in bullet format")
+
+    if re.search(r"\b(?:awesome|cool|stuff|gonna|wanna|lol)\b", text, re.IGNORECASE):
+        prof_score -= 20
+        issues.append("Informal language detected")
+        recommendations.append("Use formal, professional language throughout")
+
+    exclamation_count = text.count("!")
+    if exclamation_count > 2:
+        prof_score -= 10
+        issues.append("Excessive exclamation marks reduce professionalism")
+
+    if word_count < 150:
+        score -= 20
+        issues.append("Resume content appears too brief for comprehensive ATS evaluation")
+
+    if word_count > 1200:
+        score -= 10
+        recommendations.append("Consider trimming to 1-2 pages — overly long resumes may lose ATS focus")
+
+    score = max(min(score, 100), 0)
+    prof_score = max(min(prof_score, 100), 0)
+
+    assessment = (
+        "Resume is readable, professional, and ATS-parseable."
+        if score >= 75 and prof_score >= 75
+        else "Readability is acceptable but professionalism or conciseness could improve."
+        if score >= 50
+        else "Readability and professionalism need improvement for ATS and recruiter review."
+    )
+
+    return ReadabilityAnalysis(
+        score=round(score, 1),
+        professionalism_score=round(prof_score, 1),
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _analyze_industry_relevance(text: str) -> IndustryRelevanceAnalysis:
+    relevant = [kw for kw in INDUSTRY_KEYWORDS if kw in text.lower()]
+    gaps = [kw for kw in INDUSTRY_KEYWORDS if kw not in text.lower()][:10]
+    score = (len(relevant) / len(INDUSTRY_KEYWORDS)) * 100
+
+    issues = []
+    recommendations = []
+    if score < 40:
+        issues.append("Low industry keyword density — resume may not rank for role-specific searches")
+        recommendations.append("Add industry-standard tools, methodologies, and domain terms")
+
+    assessment = (
+        f"Strong industry relevance with {len(relevant)} standard keywords present."
+        if score >= 60
+        else "Moderate industry keyword coverage — add more domain-specific terminology."
+        if score >= 30
+        else "Weak industry relevance — resume lacks standard industry keywords."
+    )
+
+    return IndustryRelevanceAnalysis(
+        score=round(score, 1),
+        relevant_keywords=relevant[:15],
+        industry_gaps=gaps,
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _analyze_job_compatibility(
+    text: str,
+    job_description_text: str,
+    keyword_analysis: KeywordAnalysis,
+    skills_gap: SkillsGapAnalysis,
+) -> JobCompatibilityAnalysis:
+    jd_lower = job_description_text.lower()
+    text_lower = text.lower()
+
+    title_patterns = re.findall(
+        r"(?:seeking|looking for|position|role|title)[:\s]+([^\n.]{5,60})",
+        jd_lower,
+    )
+    aligned = []
+    misaligned = []
+
+    if keyword_analysis.matched_keywords:
+        aligned.append(f"Keyword match: {len(keyword_analysis.matched_keywords)} terms aligned")
+
+    if skills_gap.present_skills:
+        aligned.append(f"Skills present: {', '.join(skills_gap.present_skills[:5])}")
+
+    if keyword_analysis.missing_keywords:
+        misaligned.append(
+            f"Missing keywords: {', '.join(keyword_analysis.missing_keywords[:5])}"
+        )
+
+    if skills_gap.missing_skills:
+        misaligned.append(f"Skills gaps: {', '.join(skills_gap.missing_skills[:5])}")
+
+    seniority_terms = ["senior", "lead", "principal", "staff", "manager", "director", "junior", "entry"]
+    jd_seniority = [t for t in seniority_terms if t in jd_lower]
+    resume_seniority = [t for t in seniority_terms if t in text_lower]
+    if jd_seniority and not resume_seniority:
+        misaligned.append(f"Job expects {jd_seniority[0]}-level experience — not reflected in resume")
+
+    score = keyword_analysis.keyword_match_score
+    if skills_gap.score:
+        score = (score + skills_gap.score) / 2
+
+    if score >= 75:
+        level = "Strong"
+    elif score >= 50:
+        level = "Moderate"
+    else:
+        level = "Weak"
+
+    issues = []
+    recommendations = []
+    if score < 60:
+        issues.append("Resume may not pass automated screening for this specific role")
+        recommendations.append("Tailor summary and top bullets to mirror job description language")
+        recommendations.append("Reorder skills to prioritize job-required competencies first")
+
+    assessment = (
+        f"{level} compatibility ({round(score, 1)}%) with the target job description."
+    )
+
+    return JobCompatibilityAnalysis(
+        score=round(score, 1),
+        compatibility_level=level,
+        aligned_areas=aligned[:6],
+        misalignment_areas=misaligned[:6],
+        assessment=assessment,
+        issues=issues,
+        recommendations=recommendations,
+    )
+
+
+def _build_coaching_insights(
+    section_feedback: list[SectionFeedback],
+    keyword_analysis: KeywordAnalysis,
+    action_verbs: ActionVerbAnalysis,
+    achievements: AchievementImpactAnalysis,
+    skills_gap: SkillsGapAnalysis,
+    formatting_issues: list[FormattingIssue],
+) -> list[CoachingInsight]:
+    insights: list[CoachingInsight] = []
+    priority_map = {"High": "High", "Medium": "Medium", "Low": "Low"}
+
+    for section in section_feedback:
+        if section.score < 70 and section.issues:
+            insights.append(CoachingInsight(
+                area=section.section_name,
+                what_is_wrong=section.issues[0],
+                why_it_impacts_ats=(
+                    f"ATS systems parse resumes by section. A weak {section.section_name.lower()} "
+                    f"section ({section.score:.0f}/100) reduces your ranking and may cause "
+                    "recruiters to skip your application."
+                ),
+                how_to_fix=section.recommendations[0] if section.recommendations else section.assessment,
+                expected_improvement=f"Improving this section could raise your ATS score by 5-15 points.",
+                priority="High" if section.ats_impact == "High" else priority_map.get(section.ats_impact, "Medium"),
+            ))
+
+    if keyword_analysis.missing_keywords:
+        insights.append(CoachingInsight(
+            area="Keyword Optimization",
+            what_is_wrong=f"Missing {len(keyword_analysis.missing_keywords)} job-relevant keywords",
+            why_it_impacts_ats=(
+                "ATS algorithms score resumes by keyword overlap with job postings. "
+                "Each missing keyword reduces your match percentage and may trigger automatic rejection."
+            ),
+            how_to_fix="Integrate missing keywords naturally into your summary, skills, and experience bullets",
+            expected_improvement=f"Adding keywords could improve match score by {min(20, len(keyword_analysis.missing_keywords) * 2)} points.",
+            priority="High" if keyword_analysis.keyword_match_score < 50 else "Medium",
+        ))
+
+    if action_verbs.score < 60:
+        insights.append(CoachingInsight(
+            area="Action Verbs",
+            what_is_wrong=action_verbs.issues[0] if action_verbs.issues else "Weak verb usage",
+            why_it_impacts_ats=action_verbs.why_it_affects_ats,
+            how_to_fix=action_verbs.recommendations[0] if action_verbs.recommendations else "Use stronger action verbs",
+            expected_improvement="Stronger verbs typically improve both ATS parsing and recruiter engagement by 5-10%.",
+            priority="Medium",
+        ))
+
+    if achievements.score < 50:
+        insights.append(CoachingInsight(
+            area="Achievement Impact",
+            what_is_wrong=achievements.issues[0] if achievements.issues else "Lack of quantified results",
+            why_it_impacts_ats=achievements.why_it_affects_ats,
+            how_to_fix=achievements.recommendations[0] if achievements.recommendations else "Add metrics to bullets",
+            expected_improvement="Quantified bullets can increase interview callback rates by 40% per industry studies.",
+            priority="High",
+        ))
+
+    for issue in formatting_issues:
+        if issue.ats_impact == "High":
+            insights.append(CoachingInsight(
+                area="Formatting",
+                what_is_wrong=issue.issue,
+                why_it_impacts_ats=issue.description,
+                how_to_fix=issue.recommendation,
+                expected_improvement="Fixing formatting issues prevents ATS parsing failures that zero out your score.",
+                priority="Critical",
+            ))
+
+    if skills_gap.missing_skills:
+        insights.append(CoachingInsight(
+            area="Skills Gap",
+            what_is_wrong=f"Missing skills: {', '.join(skills_gap.missing_skills[:5])}",
+            why_it_impacts_ats=skills_gap.why_it_affects_ats,
+            how_to_fix=skills_gap.recommendations[0] if skills_gap.recommendations else "Add missing skills",
+            expected_improvement="Closing skill gaps can improve role-specific ATS match by 10-25 points.",
+            priority="High" if skills_gap.score < 50 else "Medium",
+        ))
+
+    return insights[:12]
+
+
+def _build_optimization_checklist(
+    section_feedback: list[SectionFeedback],
+    keyword_analysis: KeywordAnalysis,
+    formatting_issues: list[FormattingIssue],
+    action_verbs: ActionVerbAnalysis,
+    achievements: AchievementImpactAnalysis,
+) -> list[ChecklistItem]:
+    checklist: list[ChecklistItem] = []
+
+    for section in section_feedback:
+        if section.score < 75:
+            for rec in section.recommendations[:1]:
+                checklist.append(ChecklistItem(
+                    item=rec,
+                    completed=False,
+                    priority="High" if section.ats_impact == "High" else "Medium",
+                    category=section.section_name,
+                ))
+
+    for kw in keyword_analysis.missing_keywords[:5]:
+        checklist.append(ChecklistItem(
+            item=f"Add keyword: '{kw}' to resume (if accurate)",
+            completed=False,
+            priority="High",
+            category="Keywords",
+        ))
+
+    for issue in formatting_issues:
+        checklist.append(ChecklistItem(
+            item=issue.recommendation,
+            completed=False,
+            priority="Critical" if issue.ats_impact == "High" else "Medium",
+            category="Formatting",
+        ))
+
+    for rec in action_verbs.recommendations[:2]:
+        checklist.append(ChecklistItem(
+            item=rec,
+            completed=False,
+            priority="Medium",
+            category="Action Verbs",
+        ))
+
+    for rec in achievements.recommendations[:2]:
+        checklist.append(ChecklistItem(
+            item=rec,
+            completed=False,
+            priority="High",
+            category="Achievements",
+        ))
+
+    return checklist[:15]
+
+
+def _enrich_section_feedback(section_feedback: list[SectionFeedback]) -> list[SectionFeedback]:
+    """Add ATS impact explanations to section feedback."""
+    why_map = {
+        "Contact Information": "ATS systems use contact data for candidate identification and CRM integration. Missing fields can prevent your resume from being matched or contacted.",
+        "Professional Summary": "The summary is heavily weighted by ATS keyword algorithms and is often the first section recruiters read after automated screening.",
+        "Work Experience": "Experience sections provide the primary data for seniority matching, skill validation, and achievement scoring in ATS pipelines.",
+        "Skills": "Dedicated skills sections are parsed as keyword indexes — critical for passing automated skill-based filters.",
+        "Education": "Education credentials are used for minimum qualification checks and degree-based filtering in ATS.",
+        "Resume Structure": "Standard section headings allow ATS parsers to categorize content correctly. Non-standard layouts cause misclassification.",
+        "Projects": "Projects supplement experience for technical roles and add keyword density for specialized ATS searches.",
+        "Certifications": "Certifications trigger credential-based filters and boost credibility scores in regulated industries.",
+    }
+    enriched = []
+    for section in section_feedback:
+        data = section.model_dump()
+        data["why_it_affects_ats"] = why_map.get(
+            section.section_name,
+            "This section affects how ATS systems categorize and score your qualifications.",
+        )
+        enriched.append(SectionFeedback(**data))
+    return enriched
+
+
 def _derive_strengths_weaknesses(
     section_feedback: list[SectionFeedback],
     formatting_issues: list[FormattingIssue],
     keyword_analysis: KeywordAnalysis,
+    action_verbs: Optional[ActionVerbAnalysis] = None,
+    achievements: Optional[AchievementImpactAnalysis] = None,
 ) -> tuple[list[str], list[str]]:
     strengths = []
     weaknesses = []
@@ -882,6 +1387,16 @@ def _derive_strengths_weaknesses(
             f"Keyword gap: missing {len(keyword_analysis.missing_keywords)} terms that ATS systems look for"
         )
 
+    if action_verbs and action_verbs.score >= 75:
+        strengths.append(f"Strong action verb usage ({action_verbs.strong_verb_count} power verbs)")
+    elif action_verbs and action_verbs.score < 50:
+        weaknesses.append("Weak action verb usage — bullets lack ownership language")
+
+    if achievements and achievements.score >= 70:
+        strengths.append(f"Good achievement quantification ({achievements.quantified_bullets} metrics)")
+    elif achievements and achievements.score < 40:
+        weaknesses.append("Achievements lack measurable impact — add numbers and percentages")
+
     high_formatting = [i for i in formatting_issues if i.ats_impact == "High"]
     if not high_formatting and not weaknesses:
         strengths.append("No critical ATS formatting issues detected")
@@ -891,7 +1406,7 @@ def _derive_strengths_weaknesses(
     if not strengths:
         strengths.append("Resume contains parseable text content for ATS processing")
 
-    return strengths[:8], weaknesses[:8]
+    return strengths[:10], weaknesses[:10]
 
 
 def analyze_resume_ats(
@@ -913,6 +1428,18 @@ def analyze_resume_ats(
     formatting_score, formatting_issues = _analyze_formatting(resume_text)
     keyword_analysis = _analyze_keywords(resume_text, job_description_text)
 
+    action_verb_analysis = _analyze_action_verbs(resume_text)
+    achievement_impact_analysis = _analyze_achievement_impact(resume_text)
+    skills_gap_analysis = _analyze_skills_gap(resume_text, job_description_text)
+    readability_analysis = _analyze_readability(resume_text)
+    industry_relevance_analysis = _analyze_industry_relevance(resume_text)
+
+    job_compatibility_analysis = None
+    if job_description_text:
+        job_compatibility_analysis = _analyze_job_compatibility(
+            resume_text, job_description_text, keyword_analysis, skills_gap_analysis
+        )
+
     category_scores = {
         "resume_structure": structure_score,
         "contact_information": contact_score,
@@ -924,9 +1451,19 @@ def analyze_resume_ats(
         "certifications": certifications_score,
         "keyword_optimization": keyword_analysis.keyword_match_score,
         "formatting_readability": formatting_score,
+        "action_verbs": action_verb_analysis.score,
+        "achievement_impact": achievement_impact_analysis.score,
+        "skills_gap": skills_gap_analysis.score,
+        "readability_professionalism": (
+            readability_analysis.score + readability_analysis.professionalism_score
+        ) / 2,
+        "industry_relevance": industry_relevance_analysis.score,
     }
 
-    section_feedback = [
+    if job_compatibility_analysis:
+        category_scores["job_compatibility"] = job_compatibility_analysis.score
+
+    section_feedback = _enrich_section_feedback([
         structure_feedback,
         contact_feedback,
         summary_feedback,
@@ -935,31 +1472,61 @@ def analyze_resume_ats(
         education_feedback,
         projects_feedback,
         certifications_feedback,
-    ]
+    ])
 
     weights = {
-        "resume_structure": 0.12,
-        "contact_information": 0.08,
-        "professional_summary": 0.10,
-        "work_experience": 0.20,
-        "skills": 0.12,
-        "education": 0.08,
-        "projects": 0.05,
-        "certifications": 0.03,
-        "keyword_optimization": 0.12,
-        "formatting_readability": 0.10,
+        "resume_structure": 0.08,
+        "contact_information": 0.05,
+        "professional_summary": 0.08,
+        "work_experience": 0.15,
+        "skills": 0.08,
+        "education": 0.05,
+        "projects": 0.03,
+        "certifications": 0.02,
+        "keyword_optimization": 0.10,
+        "formatting_readability": 0.07,
+        "action_verbs": 0.08,
+        "achievement_impact": 0.10,
+        "skills_gap": 0.08,
+        "readability_professionalism": 0.06,
+        "industry_relevance": 0.05,
     }
+
+    if job_compatibility_analysis:
+        weights["job_compatibility"] = 0.10
+        total = sum(weights.values())
+        weights = {k: v / total for k, v in weights.items()}
 
     overall_score = sum(
         category_scores[key] * weights[key]
         for key in weights
+        if key in category_scores
     )
     overall_score = round(min(max(overall_score, 0), 100), 1)
 
     improvement_suggestions = _build_improvement_suggestions(section_feedback, keyword_analysis)
     roadmap = _build_roadmap(section_feedback, formatting_issues, keyword_analysis)
     strengths, weaknesses = _derive_strengths_weaknesses(
-        section_feedback, formatting_issues, keyword_analysis
+        section_feedback,
+        formatting_issues,
+        keyword_analysis,
+        action_verb_analysis,
+        achievement_impact_analysis,
+    )
+    coaching_insights = _build_coaching_insights(
+        section_feedback,
+        keyword_analysis,
+        action_verb_analysis,
+        achievement_impact_analysis,
+        skills_gap_analysis,
+        formatting_issues,
+    )
+    optimization_checklist = _build_optimization_checklist(
+        section_feedback,
+        keyword_analysis,
+        formatting_issues,
+        action_verb_analysis,
+        achievement_impact_analysis,
     )
 
     return ATSAnalysisReport(
@@ -972,4 +1539,12 @@ def analyze_resume_ats(
         strengths=strengths,
         weaknesses=weaknesses,
         roadmap=roadmap,
+        coaching_insights=coaching_insights,
+        action_verb_analysis=action_verb_analysis,
+        achievement_impact_analysis=achievement_impact_analysis,
+        skills_gap_analysis=skills_gap_analysis,
+        readability_analysis=readability_analysis,
+        industry_relevance_analysis=industry_relevance_analysis,
+        job_compatibility_analysis=job_compatibility_analysis,
+        optimization_checklist=optimization_checklist,
     )

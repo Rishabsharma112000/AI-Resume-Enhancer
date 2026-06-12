@@ -10,6 +10,9 @@ import {
   ChevronUp,
   Lightbulb,
   Map,
+  Brain,
+  ListChecks,
+  Award,
 } from 'lucide-react'
 import { useState } from 'react'
 import { ResumeAnalysis, SectionFeedback, RoadmapItem } from '../types'
@@ -36,6 +39,71 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
           style={{ width: `${Math.min(score, 100)}%` }}
         />
       </div>
+    </div>
+  )
+}
+
+function PriorityBadge({ priority }: { priority: 'Critical' | 'High' | 'Medium' | 'Low' }) {
+  const styles = {
+    Critical: 'bg-red-200 text-red-900 border-red-300',
+    High: 'bg-orange-100 text-orange-800 border-orange-200',
+    Medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    Low: 'bg-green-100 text-green-800 border-green-200',
+  }
+  return (
+    <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${styles[priority]}`}>
+      {priority}
+    </span>
+  )
+}
+
+function DimensionCard({
+  title,
+  score,
+  assessment,
+  issues,
+  recommendations,
+  whyItAffectsAts,
+  children,
+}: {
+  title: string
+  score: number
+  assessment: string
+  issues?: string[]
+  recommendations?: string[]
+  whyItAffectsAts?: string
+  children?: React.ReactNode
+}) {
+  const color = score >= 75 ? 'text-green-700' : score >= 50 ? 'text-yellow-700' : 'text-red-700'
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-gray-800">{title}</h4>
+        <span className={`text-xl font-bold ${color}`}>{Math.round(score)}</span>
+      </div>
+      <p className="text-sm text-gray-600 mb-3">{assessment}</p>
+      {whyItAffectsAts && (
+        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded mb-3 italic">{whyItAffectsAts}</p>
+      )}
+      {children}
+      {issues && issues.length > 0 && (
+        <ul className="space-y-1 mb-2">
+          {issues.map((issue, idx) => (
+            <li key={idx} className="text-sm text-red-700 flex items-start">
+              <span className="mr-2">•</span>{issue}
+            </li>
+          ))}
+        </ul>
+      )}
+      {recommendations && recommendations.length > 0 && (
+        <ul className="space-y-1">
+          {recommendations.map((rec, idx) => (
+            <li key={idx} className="text-sm text-blue-700 flex items-start">
+              <span className="mr-2">→</span>{rec}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
@@ -91,6 +159,12 @@ function SectionCard({ section }: { section: SectionFeedback }) {
 
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
+          {section.why_it_affects_ats && (
+            <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded italic">
+              <span className="font-medium not-italic text-gray-700">Why this affects ATS: </span>
+              {section.why_it_affects_ats}
+            </p>
+          )}
           {section.issues.length > 0 && (
             <div>
               <p className="text-sm font-medium text-red-700 mb-2">Identified Issues</p>
@@ -211,16 +285,195 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
         </div>
       </div>
 
-      {/* Category Scores */}
+      {/* ATS Score Dashboard */}
+      {report?.ai_enhanced && (
+        <div className="flex items-center space-x-2 text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-4 py-2">
+          <Brain className="w-4 h-4" />
+          <span>AI-enhanced coaching insights included</span>
+        </div>
+      )}
+
       {report?.category_scores && Object.keys(report.category_scores).length > 0 && (
         <div className="bg-white rounded-lg p-6 border border-gray-200">
           <div className="flex items-center space-x-2 mb-4">
             <Target className="w-5 h-5 text-blue-600" />
-            <h3 className="font-semibold text-gray-800">Category Scores</h3>
+            <h3 className="font-semibold text-gray-800">ATS Score Dashboard — Category Breakdown</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(report.category_scores).map(([label, score]) => (
               <ScoreBar key={label} label={label} score={score} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Deep Analysis Dimensions */}
+      {report?.action_verb_analysis && (
+        <div>
+          <div className="flex items-center space-x-2 mb-4">
+            <Award className="w-5 h-5 text-indigo-600" />
+            <h3 className="font-semibold text-gray-800 text-lg">Deep ATS Analysis</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <DimensionCard
+              title="Action Verb Usage"
+              score={report.action_verb_analysis.score}
+              assessment={report.action_verb_analysis.assessment}
+              issues={report.action_verb_analysis.issues}
+              recommendations={report.action_verb_analysis.recommendations}
+              whyItAffectsAts={report.action_verb_analysis.why_it_affects_ats}
+            >
+              {report.action_verb_analysis.strong_verbs_found.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-green-700 mb-1">Strong verbs found</p>
+                  <div className="flex flex-wrap gap-1">
+                    {report.action_verb_analysis.strong_verbs_found.map((v, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">{v}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {report.action_verb_analysis.weak_phrases_found.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-xs font-medium text-red-700 mb-1">Weak phrases</p>
+                  <div className="flex flex-wrap gap-1">
+                    {report.action_verb_analysis.weak_phrases_found.map((v, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs">{v}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </DimensionCard>
+
+            <DimensionCard
+              title="Achievement & Impact"
+              score={report.achievement_impact_analysis.score}
+              assessment={report.achievement_impact_analysis.assessment}
+              issues={report.achievement_impact_analysis.issues}
+              recommendations={report.achievement_impact_analysis.recommendations}
+              whyItAffectsAts={report.achievement_impact_analysis.why_it_affects_ats}
+            >
+              <p className="text-sm text-gray-600 mb-2">
+                {report.achievement_impact_analysis.quantified_bullets} of{' '}
+                {report.achievement_impact_analysis.total_bullets} bullets quantified
+              </p>
+            </DimensionCard>
+
+            <DimensionCard
+              title="Skills Gap Analysis"
+              score={report.skills_gap_analysis.score}
+              assessment={report.skills_gap_analysis.assessment}
+              issues={report.skills_gap_analysis.issues}
+              recommendations={report.skills_gap_analysis.recommendations}
+              whyItAffectsAts={report.skills_gap_analysis.why_it_affects_ats}
+            >
+              {report.skills_gap_analysis.missing_skills.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {report.skills_gap_analysis.missing_skills.map((s, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs">{s}</span>
+                  ))}
+                </div>
+              )}
+            </DimensionCard>
+
+            <DimensionCard
+              title="Readability & Professionalism"
+              score={(report.readability_analysis.score + report.readability_analysis.professionalism_score) / 2}
+              assessment={report.readability_analysis.assessment}
+              issues={report.readability_analysis.issues}
+              recommendations={report.readability_analysis.recommendations}
+              whyItAffectsAts={report.readability_analysis.why_it_affects_ats}
+            >
+              <p className="text-sm text-gray-600">
+                Readability: {Math.round(report.readability_analysis.score)} | Professionalism:{' '}
+                {Math.round(report.readability_analysis.professionalism_score)}
+              </p>
+            </DimensionCard>
+
+            <DimensionCard
+              title="Industry Relevance"
+              score={report.industry_relevance_analysis.score}
+              assessment={report.industry_relevance_analysis.assessment}
+              issues={report.industry_relevance_analysis.issues}
+              recommendations={report.industry_relevance_analysis.recommendations}
+              whyItAffectsAts={report.industry_relevance_analysis.why_it_affects_ats}
+            />
+
+            {report.job_compatibility_analysis && (
+              <DimensionCard
+                title="Job Role Compatibility"
+                score={report.job_compatibility_analysis.score}
+                assessment={report.job_compatibility_analysis.assessment}
+                issues={report.job_compatibility_analysis.issues}
+                recommendations={report.job_compatibility_analysis.recommendations}
+                whyItAffectsAts={report.job_compatibility_analysis.why_it_affects_ats}
+              >
+                <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mb-2">
+                  {report.job_compatibility_analysis.compatibility_level} Match
+                </span>
+                {report.job_compatibility_analysis.aligned_areas.length > 0 && (
+                  <p className="text-xs text-green-700 mb-1">
+                    Aligned: {report.job_compatibility_analysis.aligned_areas.join('; ')}
+                  </p>
+                )}
+                {report.job_compatibility_analysis.misalignment_areas.length > 0 && (
+                  <p className="text-xs text-red-700">
+                    Gaps: {report.job_compatibility_analysis.misalignment_areas.join('; ')}
+                  </p>
+                )}
+              </DimensionCard>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* AI Coaching Insights */}
+      {report?.coaching_insights && report.coaching_insights.length > 0 && (
+        <div className="bg-white rounded-lg p-6 border border-purple-200">
+          <div className="flex items-center space-x-2 mb-4">
+            <Brain className="w-5 h-5 text-purple-600" />
+            <h3 className="font-semibold text-gray-800">Career Coaching Insights</h3>
+          </div>
+          <div className="space-y-4">
+            {report.coaching_insights.map((insight, idx) => (
+              <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-gray-800">{insight.area}</h4>
+                  <PriorityBadge priority={insight.priority} />
+                </div>
+                <div className="grid grid-cols-1 gap-2 text-sm">
+                  <p><span className="font-medium text-red-700">What&apos;s wrong: </span>{insight.what_is_wrong}</p>
+                  <p><span className="font-medium text-orange-700">Why it impacts ATS: </span>{insight.why_it_impacts_ats}</p>
+                  <p><span className="font-medium text-blue-700">How to fix: </span>{insight.how_to_fix}</p>
+                  <p className="bg-green-50 p-2 rounded text-green-800">
+                    <span className="font-medium">Expected improvement: </span>{insight.expected_improvement}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Optimization Checklist */}
+      {report?.optimization_checklist && report.optimization_checklist.length > 0 && (
+        <div className="bg-white rounded-lg p-6 border border-gray-200">
+          <div className="flex items-center space-x-2 mb-4">
+            <ListChecks className="w-5 h-5 text-teal-600" />
+            <h3 className="font-semibold text-gray-800">Resume Optimization Checklist</h3>
+          </div>
+          <div className="space-y-2">
+            {report.optimization_checklist.map((item, idx) => (
+              <div key={idx} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                <input type="checkbox" readOnly checked={item.completed} className="mt-1" />
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">{item.item}</p>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs text-gray-500">{item.category}</span>
+                    <PriorityBadge priority={item.priority} />
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -392,6 +645,14 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
                 </div>
                 <p className="text-sm text-gray-600 mb-1">{suggestion.current_state}</p>
                 <p className="text-sm text-gray-800">{suggestion.suggestion}</p>
+                {suggestion.why_it_affects_ats && (
+                  <p className="text-sm text-gray-500 mt-1 italic">{suggestion.why_it_affects_ats}</p>
+                )}
+                {suggestion.expected_improvement && (
+                  <p className="text-sm text-green-700 mt-1">
+                    Expected: {suggestion.expected_improvement}
+                  </p>
+                )}
                 {suggestion.example && (
                   <p className="text-sm text-green-700 mt-2 bg-green-50 p-2 rounded">
                     Example: {suggestion.example}

@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { Loader } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { resumeService, analysisService, jobDescriptionService } from '../services/authService'
-import { Resume, ResumeAnalysis, JobDescription } from '../types'
+import { Resume, ResumeAnalysis, JobDescription, EnhancedResume } from '../types'
 import ResumeUpload from '../components/ResumeUpload'
 import ResumeList from '../components/ResumeList'
 import AnalysisResults from '../components/AnalysisResults'
+import EnhancementResults from '../components/EnhancementResults'
 import JobDescriptionForm from '../components/JobDescriptionForm'
 
 export default function DashboardPage() {
@@ -14,7 +15,9 @@ export default function DashboardPage() {
   const [selectedResume, setSelectedResume] = useState<Resume | null>(null)
   const [selectedJD, setSelectedJD] = useState<JobDescription | null>(null)
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null)
+  const [enhanced, setEnhanced] = useState<EnhancedResume | null>(null)
   const [loading, setLoading] = useState(false)
+  const [enhancing, setEnhancing] = useState(false)
   const [tab, setTab] = useState<'upload' | 'analyze'>('upload')
 
   useEffect(() => {
@@ -47,15 +50,16 @@ export default function DashboardPage() {
     }
 
     setLoading(true)
+    setEnhanced(null)
     try {
       const result = await analysisService.analyzeResume(
         selectedResume.id,
         selectedJD?.id
       )
       setAnalysis(result)
-      toast.success('Analysis completed')
+      toast.success('Deep ATS analysis completed')
     } catch (error: any) {
-      toast.error('Failed to analyze resume')
+      toast.error(error?.response?.data?.detail || 'Failed to analyze resume')
     } finally {
       setLoading(false)
     }
@@ -67,15 +71,15 @@ export default function DashboardPage() {
       return
     }
 
-    setLoading(true)
+    setEnhancing(true)
     try {
-      await analysisService.enhanceResume(analysis.id)
-      toast.success('Resume enhanced! Ready to download.')
-      // You can add download functionality here
+      const result = await analysisService.enhanceResume(analysis.id)
+      setEnhanced(result)
+      toast.success('Resume enhanced with AI! Review and download below.')
     } catch (error: any) {
-      toast.error('Failed to enhance resume')
+      toast.error(error?.response?.data?.detail || 'Failed to enhance resume')
     } finally {
-      setLoading(false)
+      setEnhancing(false)
     }
   }
 
@@ -243,10 +247,10 @@ export default function DashboardPage() {
             {analysis && (
               <button
                 onClick={handleEnhance}
-                disabled={loading}
+                disabled={loading || enhancing}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 font-medium"
               >
-                {loading ? 'Enhancing...' : 'Enhance Resume'}
+                {enhancing ? 'Enhancing with AI...' : 'Enhance CV'}
               </button>
             )}
           </div>
@@ -254,8 +258,18 @@ export default function DashboardPage() {
           {/* Analysis Results */}
           {analysis && (
             <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Analysis Results</h2>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">ATS Analysis Results</h2>
               <AnalysisResults analysis={analysis} />
+            </div>
+          )}
+
+          {enhanced && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Enhanced Resume</h2>
+              <EnhancementResults
+                enhanced={enhanced}
+                originalAtsScore={analysis?.ats_score}
+              />
             </div>
           )}
         </div>
