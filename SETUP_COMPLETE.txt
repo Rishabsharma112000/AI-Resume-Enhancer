@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Make setup.sh executable
+chmod +x setup.sh
+
+echo "✅ Project setup complete!"
+echo ""
+echo "📖 Next steps:"
+echo ""
+echo "1. Read the documentation:"
+echo "   - Main README: cat README.md"
+echo "   - Quick Start: cat QUICKSTART.md"
+echo "   - Backend: cat backend/README.md"
+echo "   - Frontend: cat frontend/README.md"
+echo ""
+echo "2. Set up your environment:"
+echo "   - Add your OpenAI API key to .env"
+echo "   - Run: ./setup.sh"
+echo ""
+echo "3. Access the application:"
+echo "   - Frontend: http://localhost:3000"
+echo "   - Backend: http://localhost:8000"
+echo "   - API Docs: http://localhost:8000/docs"
+echo ""
+echo "Happy coding! 🚀"

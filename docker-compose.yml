@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: resumeboost-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./resume_enhance.db
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: gpt-4
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      DEBUG: "False"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/resume_enhance.db:/app/resume_enhance.db
+    networks:
+      - resumeboost-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: resumeboost-web
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - resumeboost-network
+
+networks:
+  resumeboost-network:
+    driver: bridge
