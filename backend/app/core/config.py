@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Database Configuration
-    DATABASE_URL: str = "sqlite:///./resume_enhance.db"
+    DATABASE_URL: str = "postgresql://postgres:gaysSLTqBDkyrgnbupiiTPHrZHwxNOjJ@thomas.proxy.rlwy.net:53871/railway"
     DATABASE_ECHO: bool = False
 
     # JWT Configuration
