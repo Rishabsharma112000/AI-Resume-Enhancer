@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # File Upload Configuration
     MAX_FILE_SIZE: int = 10485760  # 10MB
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = "/app/uploads"
     ALLOWED_EXTENSIONS: list = ["pdf", "docx", "doc"]
 
     # CORS Configuration
